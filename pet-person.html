@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的虚拟小人</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 30px;
+            padding: 35px 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 520px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+            min-height: 850px;
+            overflow: visible;
+        }
+
+        h1 { color: #333; margin-bottom: 8px; font-size: 26px; }
+        .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; }
+
+        /* ========== 厕所门 ========== */
+        .toilet-door {
+            position: absolute; right: 22px; top: 130px;
+            width: 52px; height: 76px;
+            background: linear-gradient(180deg, #74b9ff 0%, #0984e3 100%);
+            border-radius: 26px 26px 4px 4px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: flex-end;
+            padding-bottom: 7px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 5; border: 3px solid #fff;
+        }
+        .toilet-door .door-icon { font-size: 24px; margin-bottom: 2px; }
+        .toilet-door .door-label { font-size: 10px; color: white; font-weight: bold; }
+        .toilet-door .door-knob {
+            position: absolute; right: 7px; top: 42px;
+            width: 6px; height: 6px; background: #ffd700;
+            border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* ========== 小人拖拽外壳 ========== */
+        .person-wrapper {
+            position: relative; width: 200px; height: 320px;
+            margin: 0 auto 25px;
+            cursor: grab; user-select: none;
+            z-index: 50; touch-action: none;
+        }
+        .person-wrapper:active { cursor: grabbing; }
+        .person-wrapper.dragging { z-index: 100; }
+
+        /* ========== 拖拽时下垂 ========== */
+        .person-wrapper.dragging .person-container .head {
+            transform: translateX(-50%) rotate(18deg) translateY(6px);
+            transition: transform 0.2s ease;
+        }
+        .person-wrapper.dragging .person-container .arm.left {
+            transform: rotate(50deg) translateY(10px);
+            transition: transform 0.2s ease;
+        }
+        .person-wrapper.dragging .person-container .arm.right {
+            transform: rotate(-50deg) translateY(10px);
+            transition: transform 0.2s ease;
+        }
+        .person-wrapper.dragging .person-container .body {
+            transform: translateX(-50%) scaleY(0.93) scaleX(1.02);
+            transition: transform 0.2s ease;
+        }
+        .person-wrapper.dragging .person-container .leg.left {
+            transform: rotate(-8deg) translateY(3px);
+            transition: transform 0.2s ease;
+        }
+        .person-wrapper.dragging .person-container .leg.right {
+            transform: rotate(8deg) translateY(3px);
+            transition: transform 0.2s ease;
+        }
+        .person-wrapper.dragging .person-container {
+            transition: none;
+        }
+
+        /* ========== 小人主体 ========== */
+        .person-container {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Q弹动画 */
+        @keyframes jelly {
+            0%   { transform: scale(1, 1); }
+            25%  { transform: scale(0.92, 1.08); }
+            50%  { transform: scale(1.06, 0.94); }
+            75%  { transform: scale(0.97, 1.03); }
+            100% { transform: scale(1, 1); }
+        }
+        .person-container.bouncy {
+            animation: jelly 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        /* 抚摸害羞 */
+        @keyframes shyWiggle {
+            0%, 100% { transform: rotate(0deg) translateX(0); }
+            25% { transform: rotate(3deg) translateX(2px); }
+            75% { transform: rotate(-3deg) translateX(-2px); }
+        }
+        .person-container.shy {
+            animation: shyWiggle 0.4s ease-in-out;
+        }
+        .person-container.shy .cheeks .cheek {
+            background: rgba(255, 107, 107, 0.65) !important;
+            transition: background 0.3s;
+        }
+
+        /* 小人进门 */
+        .person-container.in-toilet {
+            transform: scale(0) !important;
+            transition: transform 0.5s ease;
+        }
+
+        /* 头顶气泡 */
+        .thought-bubble {
+            position: absolute; top: -12px; left: 50%;
+            transform: translateX(-50%) scale(0);
+            background: white; padding: 8px 16px;
+            border-radius: 22px; font-size: 26px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            z-index: 30;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none; white-space: nowrap;
+            border: 3px solid #fff;
+        }
+        .thought-bubble::after {
+            content: ''; position: absolute; bottom: -9px; left: 50%;
+            transform: translateX(-50%);
+            border-left: 9px solid transparent;
+            border-right: 9px solid transparent;
+            border-top: 11px solid white;
+        }
+        .thought-bubble.show { transform: translateX(-50%) scale(1); }
+
+        /* 头部 */
+        .head {
+            position: absolute; top: 10px; left: 50%;
+            transform: translateX(-50%);
+            width: 126px; height: 122px;
+            background: #ffeaa7; border-radius: 50%;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+            overflow: hidden; border: 4px solid #fff;
+            z-index: 10; transition: transform 0.15s ease-out;
+            transform-origin: center 80%;
+        }
+        .face-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .default-face {
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            position: relative;
+        }
+        .eyes {
+            display: flex; gap: 26px; margin-bottom: 6px; margin-top: 12px;
+            transition: transform 0.15s ease-out;
+        }
+        .eye {
+            width: 13px; height: 15px; background: #333;
+            border-radius: 50%; animation: blink 4s infinite;
+            position: relative; transition: transform 0.15s ease-out;
+        }
+        .eye::after {
+            content: ''; position: absolute; top: 3px; right: 3px;
+            width: 5px; height: 5px; background: white; border-radius: 50%;
+        }
+        .mouth {
+            width: 26px; height: 13px;
+            border-bottom: 3px solid #333; border-radius: 0 0 26px 26px;
+            margin-top: 4px; transition: all 0.3s ease;
+        }
+        @keyframes blink {
+            0%, 96%, 100% { transform: scaleY(1); }
+            98% { transform: scaleY(0.1); }
+        }
+        .cheeks {
+            position: absolute; width: 100%; top: 62px;
+            display: flex; justify-content: space-between;
+            padding: 0 10px; pointer-events: none;
+        }
+        .cheek {
+            width: 16px; height: 10px;
+            background: rgba(255, 107, 107, 0.35);
+            border-radius: 50%; transition: background 0.3s;
+        }
+
+        /* 身体 - 与头部重叠连接 */
+        .body {
+            position: absolute; top: 118px; left: 50%;
+            transform: translateX(-50%);
+            width: 74px; height: 88px;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            border-radius: 37px 37px 30px 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            z-index: 5; transition: transform 0.3s ease;
+        }
+        .body::before {
+            content: ''; position: absolute; top: 16px; left: 50%;
+            transform: translateX(-50%);
+            width: 26px; height: 26px;
+            background: rgba(255,255,255,0.4); border-radius: 50%;
+        }
+
+        /* 手臂 - 从肩膀伸出 */
+        .arm {
+            position: absolute; width: 11px; height: 50px;
+            background: #ffeaa7; border-radius: 6px;
+            top: 108px; z-index: 6;
+            border: 2px solid #fff;
+            transform-origin: top center;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .arm.left { left: 56px; transform: rotate(20deg); }
+        .arm.right { right: 56px; transform: rotate(-20deg); }
+        .hand-circle {
+            position: absolute; bottom: -9px; left: 50%;
+            transform: translateX(-50%);
+            width: 20px; height: 20px;
+            background: #ffeaa7; border-radius: 50%;
+            border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+
+        /* 道具 */
+        .prop {
+            position: absolute; bottom: -6px; left: 50%;
+            transform: translateX(-50%) scale(0) translateY(10px);
+            font-size: 22px; opacity: 0;
+            transition: all 0.3s ease; pointer-events: none; z-index: 25;
+        }
+        .arm.show-prop .prop {
+            opacity: 1;
+            transform: translateX(-50%) scale(1) translateY(0);
+        }
+
+        .person-container.eating .arm.left {
+            transform: rotate(-45deg) translate(8px, -5px);
+        }
+        .person-container.drinking .arm.right {
+            transform: rotate(45deg) translate(-8px, -5px);
+        }
+
+        /* 腿 - 与身体底部连接 */
+        .leg {
+            position: absolute; top: 194px;
+            width: 14px; height: 46px;
+            background: #333; border-radius: 7px;
+            z-index: 4; transition: transform 0.3s ease;
+            transform-origin: top center;
+        }
+        .leg.left { left: 72px; transform: rotate(-2deg); }
+        .leg.right { right: 72px; transform: rotate(2deg); }
+        .foot-circle {
+            position: absolute; bottom: -8px; left: 50%;
+            transform: translateX(-50%);
+            width: 26px; height: 14px;
+            background: #333; border-radius: 13px 13px 4px 4px;
+        }
+
+        /* ========== 放屁扭屁股 ========== */
+        @keyframes fartWiggle {
+            0%   { transform: rotate(0deg) translateX(0); }
+            15%  { transform: rotate(-10deg) translateX(-5px); }
+            30%  { transform: rotate(10deg) translateX(5px); }
+            45%  { transform: rotate(-8deg) translateX(-4px); }
+            60%  { transform: rotate(8deg) translateX(4px); }
+            75%  { transform: rotate(-4deg) translateX(-2px); }
+            90%  { transform: rotate(4deg) translateX(2px); }
+            100% { transform: rotate(0deg) translateX(0); }
+        }
+        .person-container.farting {
+            animation: fartWiggle 0.7s ease-in-out;
+        }
+
+        /* ========== 开心扭动 ========== */
+        .person-container.happy {
+            animation: happyDance 0.55s ease-in-out infinite;
+        }
+        @keyframes happyDance {
+            0%, 100% { transform: rotate(-4deg) translateY(0); }
+            25% { transform: rotate(4deg) translateY(-5px); }
+            50% { transform: rotate(-4deg) translateY(0); }
+            75% { transform: rotate(4deg) translateY(-5px); }
+        }
+
+        /* ========== 伤心垂头丧气 ========== */
+        .person-container.very-sad {
+            transform: translateY(16px);
+            transition: transform 0.6s ease;
+        }
+        .person-container.very-sad .head {
+            transform: translateX(-50%) rotate(12deg);
+        }
+        .person-container.very-sad .body {
+            transform: translateX(-50%) scale(0.95);
+        }
+        .person-container.very-sad .arm.left {
+            transform: rotate(55deg) translateY(8px);
+        }
+        .person-container.very-sad .arm.right {
+            transform: rotate(-55deg) translateY(8px);
+        }
+        .person-container.very-sad .leg {
+            transform: rotate(0deg) translateY(4px);
+        }
+
+        /* ========== 饥饿发抖 ========== */
+        .person-container.very-hungry {
+            animation: hungryShake 0.5s ease-in-out infinite;
+        }
+        @keyframes hungryShake {
+            0%, 100% { transform: translateX(0) rotate(0); }
+            25% { transform: translateX(-4px) rotate(-2deg); }
+            75% { transform: translateX(4px) rotate(2deg); }
+        }
+        .person-container.very-hungry .mouth {
+            width: 15px; height: 15px; background: #333;
+            border-radius: 50%; border: none;
+        }
+        .person-container.very-thirsty .head { filter: saturate(0.6); }
+        .person-container.very-thirsty .mouth {
+            width: 17px; height: 9px; background: #333;
+            border-radius: 50%; border: none;
+        }
+        .person-container.very-sad .mouth {
+            width: 22px; height: 11px;
+            border-top: 3px solid #333; border-bottom: none;
+            border-radius: 22px 22px 0 0;
+        }
+
+        /* ========== 状态条 ========== */
+        .stats { margin-bottom: 18px; }
+        .stat-item { margin-bottom: 10px; text-align: left; }
+        .stat-label {
+            display: flex; justify-content: space-between;
+            margin-bottom: 3px; font-size: 12px; color: #555;
+        }
+        .stat-bar {
+            width: 100%; height: 16px;
+            background: #e0e0e0; border-radius: 8px;
+            overflow: hidden; position: relative;
+        }
+        .stat-fill {
+            height: 100%; border-radius: 8px;
+            transition: width 0.5s ease, background-color 0.5s ease;
+        }
+        .stat-fill.hunger { background: linear-gradient(90deg, #ff6b6b, #ee5a24); }
+        .stat-fill.thirst { background: linear-gradient(90deg, #48dbfb, #0abde3); }
+        .stat-fill.happiness { background: linear-gradient(90deg, #feca57, #ff9f43); }
+        .stat-fill.fart { background: linear-gradient(90deg, #55efc4, #00b894); }
+        .stat-fill.pee { background: linear-gradient(90deg, #ffeaa7, #fdcb6e); }
+
+        /* 徽章 */
+        .status-badges {
+            display: flex; gap: 6px; justify-content: center;
+            margin-bottom: 14px; min-height: 28px; flex-wrap: wrap;
+        }
+        .badge {
+            padding: 3px 10px; border-radius: 12px;
+            font-size: 11px; font-weight: bold; color: white;
+            opacity: 0; transform: scale(0.8);
+            transition: all 0.3s ease;
+        }
+        .badge.show { opacity: 1; transform: scale(1); }
+        .badge.hungry { background: #ff6b6b; }
+        .badge.thirsty { background: #48dbfb; }
+        .badge.sad { background: #a29bfe; }
+        .badge.gassy { background: #00b894; }
+        .badge.urgent { background: #fdcb6e; color: #333; }
+
+        /* ========== 按钮 ========== */
+        .controls {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 10px; justify-content: center;
+            margin-bottom: 18px;
+        }
+        .btn {
+            padding: 9px 0; border: none; border-radius: 18px;
+            font-size: 14px; cursor: pointer;
+            transition: all 0.3s ease; font-family: inherit;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        .btn:active { transform: translateY(0); }
+        .btn-feed { background: linear-gradient(135deg, #ff6b6b, #ee5a24); color: white; }
+        .btn-water { background: linear-gradient(135deg, #48dbfb, #0abde3); color: white; }
+        .btn-fart { background: linear-gradient(135deg, #55efc4, #00b894); color: white; }
+        .btn-toilet { background: linear-gradient(135deg, #ffeaa7, #fdcb6e); color: #333; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+        /* ========== 设置 ========== */
+        .settings { background: #f8f9fa; border-radius: 15px; padding: 18px; margin-top: 18px; }
+        .settings-title { font-size: 15px; color: #333; margin-bottom: 12px; font-weight: bold; }
+        .input-group { margin-bottom: 12px; text-align: left; }
+        .input-group label { display: block; margin-bottom: 4px; font-size: 13px; color: #555; }
+        .input-group input[type="text"] {
+            width: 100%; padding: 9px 14px;
+            border: 2px solid #ddd; border-radius: 10px;
+            font-size: 14px; font-family: inherit; transition: border-color 0.3s;
+        }
+        .input-group input[type="text"]:focus { outline: none; border-color: #667eea; }
+        .input-group input[type="file"] { display: none; }
+        .file-label {
+            display: inline-block; padding: 9px 18px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; border-radius: 10px;
+            cursor: pointer; font-size: 13px; transition: all 0.3s ease;
+        }
+        .file-label:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+
+        /* ========== 消息提示 ========== */
+        .message {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: white; padding: 14px 28px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            font-size: 15px; color: #333;
+            opacity: 0; transition: all 0.3s ease; z-index: 1000;
+        }
+        .message.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        /* ========== 粒子特效 ========== */
+        .particle {
+            position: absolute; pointer-events: none;
+            animation: particleFloat 1s ease-out forwards;
+            z-index: 80; font-size: 18px;
+        }
+        @keyframes particleFloat {
+            0% { transform: translate(0, 0) scale(0.5) rotate(0deg); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(1.2) rotate(var(--rot)); opacity: 0; }
+        }
+
+        .emoji-effect {
+            position: absolute; font-size: 26px;
+            pointer-events: none; z-index: 100;
+            animation: floatUp 1s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.5); opacity: 1; }
+            100% { transform: translateY(-90px) scale(1.2); opacity: 0; }
+        }
+
+        .fart-cloud {
+            position: absolute; font-size: 30px;
+            pointer-events: none; z-index: 60;
+            animation: fartFloat 1.5s ease-out forwards;
+        }
+        @keyframes fartFloat {
+            0% { transform: translate(0, 0) scale(0.3); opacity: 0.8; }
+            50% { opacity: 0.5; }
+            100% { transform: translate(-25px, -50px) scale(1.4); opacity: 0; }
+        }
+
+        .heart-particle {
+            position: absolute; pointer-events: none;
+            z-index: 90; font-size: 20px;
+            animation: heartFloat 1.2s ease-out forwards;
+        }
+        @keyframes heartFloat {
+            0% { transform: translate(0, 0) scale(0.3); opacity: 1; }
+            100% { transform: translate(var(--tx), -70px) scale(1); opacity: 0; }
+        }
+
+        .photo-preview {
+            width: 70px; height: 70px; border-radius: 50%;
+            object-fit: cover; margin-top: 8px;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: none;
+        }
+        .tips {
+            margin-top: 10px; padding: 8px;
+            background: #fff3cd; border-radius: 8px;
+            font-size: 11px; color: #856404; text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 我的虚拟小人</h1>
+        <p class="subtitle" id="nameDisplay">小人的快乐生活</p>
+
+        <div class="toilet-door" id="toiletDoor">
+            <div class="door-icon">🚪</div>
+            <div class="door-label">厕所</div>
+            <div class="door-knob"></div>
+        </div>
+
+        <div class="person-wrapper" id="personWrapper">
+            <div class="person-container" id="person">
+                <div class="thought-bubble" id="thoughtBubble"></div>
+
+                <div class="head" id="head">
+                    <img class="face-photo" id="facePhoto" style="display: none;" alt="脸部照片">
+                    <div class="default-face" id="defaultFace">
+                        <div class="eyes" id="eyes">
+                            <div class="eye"></div>
+                            <div class="eye"></div>
+                        </div>
+                        <div class="mouth"></div>
+                    </div>
+                    <div class="cheeks" id="cheeks">
+                        <div class="cheek"></div>
+                        <div class="cheek"></div>
+                    </div>
+                </div>
+
+                <div class="arm left" id="armLeft">
+                    <div class="hand-circle"></div>
+                    <div class="prop" id="propLeft">🍚</div>
+                </div>
+                <div class="arm right" id="armRight">
+                    <div class="hand-circle"></div>
+                    <div class="prop" id="propRight">🥤</div>
+                </div>
+
+                <div class="body"></div>
+
+                <div class="leg left"><div class="foot-circle"></div></div>
+                <div class="leg right"><div class="foot-circle"></div></div>
+            </div>
+        </div>
+
+        <div class="status-badges" id="statusBadges">
+            <div class="badge hungry" id="badgeHungry">😫 很饿</div>
+            <div class="badge thirsty" id="badgeThirsty">😵 很渴</div>
+            <div class="badge sad" id="badgeSad">😢 很难过</div>
+            <div class="badge gassy" id="badgeGassy">💨 想放屁</div>
+            <div class="badge urgent" id="badgeUrgent">🚽 想上厕所</div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-label"><span>🍖 饱食度</span><span id="hungerValue">80%</span></div>
+                <div class="stat-bar"><div class="stat-fill hunger" id="hungerBar" style="width: 80%"></div></div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label"><span>💧 水分</span><span id="thirstValue">80%</span></div>
+                <div class="stat-bar"><div class="stat-fill thirst" id="thirstBar" style="width: 80%"></div></div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label"><span>😊 心情</span><span id="happinessValue">80%</span></div>
+                <div class="stat-bar"><div class="stat-fill happiness" id="happinessBar" style="width: 80%"></div></div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label"><span>💨 放屁值</span><span id="fartValue">10%</span></div>
+                <div class="stat-bar"><div class="stat-fill fart" id="fartBar" style="width: 10%"></div></div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label"><span>🚽 尿尿值</span><span id="peeValue">10%</span></div>
+                <div class="stat-bar"><div class="stat-fill pee" id="peeBar" style="width: 10%"></div></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-feed" id="feedBtn" onclick="feed()">🍔 喂食</button>
+            <button class="btn btn-water" id="waterBtn" onclick="giveWater()">🥤 喂水</button>
+            <button class="btn btn-fart" id="fartBtn" onclick="fart()">💨 放屁</button>
+            <button class="btn btn-toilet" id="toiletBtn" onclick="goToilet()">🚽 上厕所</button>
+        </div>
+
+        <div class="settings">
+            <div class="settings-title">⚙️ 设置</div>
+            <div class="input-group">
+                <label>姓名</label>
+                <input type="text" id="nameInput" value="小人" placeholder="输入小人的名字" onchange="updateName()">
+            </div>
+            <div class="input-group">
+                <label>脸部照片</label>
+                <label class="file-label" for="photoInput">📷 选择照片</label>
+                <input type="file" id="photoInput" accept="image/*" onchange="updatePhoto(event)">
+                <img class="photo-preview" id="photoPreview" alt="预览">
+                <div class="tips">💡 系统会自动将照片裁剪为圆形头像。</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="message" id="message"></div>
+
+    <script>
+        // ========== 音效系统（Web Audio API 合成） ==========
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function ensureAudio() {
+            if (!audioCtx) audioCtx = new AudioCtx();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        // Minecraft风格吃东西：短促干燥的白噪声咔吱声
+        function playEatSound() {
+            ensureAudio();
+            const count = 6;
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    const bufferSize = audioCtx.sampleRate * 0.06;
+                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let j = 0; j < bufferSize; j++) {
+                        data[j] = Math.random() * 2 - 1;
+                    }
+                    const source = audioCtx.createBufferSource();
+                    const bandpass = audioCtx.createBiquadFilter();
+                    const gain = audioCtx.createGain();
+                    source.buffer = buffer;
+                    bandpass.type = 'bandpass';
+                    bandpass.frequency.value = 1800 + Math.random() * 1500;
+                    bandpass.Q.value = 0.8;
+                    gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                    source.connect(bandpass);
+                    bandpass.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    source.start();
+                }, i * 95);
+            }
+        }
+
+        // Minecraft风格喝水：持续咕噜咕噜的低频流动噪声
+        function playDrinkSound() {
+            ensureAudio();
+            const duration = 0.7;
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                const t = i / audioCtx.sampleRate;
+                const progress = i / bufferSize;
+                // 基础低频正弦模拟喉咙震动
+                const base = Math.sin(2 * Math.PI * (100 + progress * 40) * t);
+                // 随机噪声模拟液体流动
+                const noise = (Math.random() * 2 - 1) * 0.6;
+                // 慢速波动的振幅包络
+                const swell = 0.5 + 0.5 * Math.sin(2 * Math.PI * 8 * t);
+                // 整体音量包络
+                const envelope = progress < 0.1 ? progress / 0.1 : (progress > 0.8 ? (1 - progress) / 0.2 : 1);
+                data[i] = (base * 0.4 + noise * 0.6) * swell * envelope * 0.5;
+            }
+            const source = audioCtx.createBufferSource();
+            const lowpass = audioCtx.createBiquadFilter();
+            const gain = audioCtx.createGain();
+            source.buffer = buffer;
+            lowpass.type = 'lowpass';
+            lowpass.frequency.value = 600;
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.25, audioCtx.currentTime + duration - 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            source.connect(lowpass);
+            lowpass.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start();
+        }
+
+        // 放屁音效：低频噗声 + 衰减
+        function playFartSound() {
+            ensureAudio();
+            const bufferSize = audioCtx.sampleRate * 0.7;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                const t = i / bufferSize;
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 1.5) * (0.8 + 0.2 * Math.sin(t * 20));
+            }
+            const source = audioCtx.createBufferSource();
+            const filter = audioCtx.createBiquadFilter();
+            const gain = audioCtx.createGain();
+            source.buffer = buffer;
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(250, audioCtx.currentTime);
+            filter.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.6);
+            gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.005, audioCtx.currentTime + 0.6);
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start();
+        }
+
+        // 抚摸音效：柔和的叮当声
+        function playPetSound() {
+            ensureAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = 1200;
+            gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        // Q弹音效
+        function playBounceSound() {
+            ensureAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(500, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        // ========== 游戏状态 ==========
+        let stats = { hunger: 80, thirst: 80, happiness: 80, fart: 10, pee: 10 };
+        let personName = '小人';
+        let gameLoop;
+        let isBusy = false;
+
+        // ========== 拖拽逻辑 ==========
+        const wrapper = document.getElementById('personWrapper');
+        let isDragging = false;
+        let dragStartMouse = { x: 0, y: 0 };
+        let dragStartOffset = { x: 0, y: 0 };
+        let dragOffset = { x: 0, y: 0 };
+
+        wrapper.addEventListener('mousedown', startDrag);
+        wrapper.addEventListener('touchstart', startDrag, { passive: false });
+
+        function startDrag(e) {
+            if (isBusy || e.target.closest('.btn')) return;
+            ensureAudio();
+            isDragging = true;
+            wrapper.classList.add('dragging');
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            dragStartMouse.x = clientX;
+            dragStartMouse.y = clientY;
+            dragStartOffset.x = dragOffset.x;
+            dragStartOffset.y = dragOffset.y;
+            e.preventDefault();
+        }
+
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('touchmove', onDragMove, { passive: false });
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+
+        function onDragMove(e) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            if (isDragging) {
+                dragOffset.x = dragStartOffset.x + (clientX - dragStartMouse.x);
+                dragOffset.y = dragStartOffset.y + (clientY - dragStartMouse.y);
+                wrapper.style.transform = `translate(${dragOffset.x}px, ${dragOffset.y}px)`;
+                e.preventDefault();
+            } else {
+                updateHeadTowardMouse(clientX, clientY);
+            }
+        }
+
+        function endDrag() {
+            if (isDragging) {
+                isDragging = false;
+                wrapper.classList.remove('dragging');
+                // 释放时Q弹
+                bouncePerson();
+            }
+        }
+
+        // ========== 转头跟随鼠标 ==========
+        const head = document.getElementById('head');
+        const eyes = document.getElementById('eyes');
+
+        function updateHeadTowardMouse(mx, my) {
+            const rect = head.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const dx = mx - centerX;
+            const dy = my - centerY;
+            const angle = Math.atan2(dy, dx);
+            const dist = Math.min(Math.sqrt(dx*dx + dy*dy) / 30, 1);
+            const headRotate = Math.sin(angle) * 10 * dist;
+            head.style.transform = `translateX(-50%) rotate(${headRotate}deg)`;
+            const eyeX = Math.cos(angle) * 4 * dist;
+            const eyeY = Math.sin(angle) * 3 * dist;
+            if (eyes) eyes.style.transform = `translate(${eyeX}px, ${eyeY}px)`;
+        }
+
+        // ========== Q弹效果 ==========
+        function bouncePerson() {
+            const person = document.getElementById('person');
+            person.classList.remove('bouncy');
+            void person.offsetWidth; // 强制重绘
+            person.classList.add('bouncy');
+            playBounceSound();
+            setTimeout(() => person.classList.remove('bouncy'), 600);
+        }
+
+        // ========== 抚摸系统 ==========
+        let petTimer = null;
+        let petCount = 0;
+
+        wrapper.addEventListener('mouseenter', () => { petCount = 0; });
+        wrapper.addEventListener('mousemove', onPet);
+        wrapper.addEventListener('touchmove', onPet, { passive: true });
+
+        function onPet(e) {
+            if (isDragging || isBusy) return;
+            const now = Date.now();
+            if (!petTimer || now - petTimer > 250) {
+                petTimer = now;
+                petCount++;
+                createHeartParticle(e);
+                if (petCount % 3 === 0) {
+                    const person = document.getElementById('person');
+                    person.classList.remove('shy');
+                    void person.offsetWidth;
+                    person.classList.add('shy');
+                    setTimeout(() => person.classList.remove('shy'), 400);
+                    playPetSound();
+                    if (petCount % 6 === 0) {
+                        showMessage(personName + '好舒服~ ❤️');
+                        stats.happiness = Math.min(100, stats.happiness + 2);
+                        updateDisplay();
+                    }
+                }
+            }
+        }
+
+        function createHeartParticle(e) {
+            const rect = wrapper.getBoundingClientRect();
+            const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+            const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+            const heart = document.createElement('div');
+            heart.className = 'heart-particle';
+            heart.textContent = ['❤️', '💕', '💖', '💗'][Math.floor(Math.random()*4)];
+            heart.style.left = x + 'px';
+            heart.style.top = y + 'px';
+            heart.style.setProperty('--tx', (Math.random()*40 - 20) + 'px');
+            wrapper.appendChild(heart);
+            setTimeout(() => heart.remove(), 1200);
+        }
+
+        // 点击小人直接Q弹
+        wrapper.addEventListener('click', (e) => {
+            if (!isDragging && !isBusy && !e.target.closest('.btn')) {
+                bouncePerson();
+                createEmojiEffect('✨');
+            }
+        });
+
+        // ========== 更新显示 ==========
+        function updateDisplay() {
+            document.getElementById('hungerBar').style.width = stats.hunger + '%';
+            document.getElementById('hungerValue').textContent = Math.round(stats.hunger) + '%';
+            document.getElementById('thirstBar').style.width = stats.thirst + '%';
+            document.getElementById('thirstValue').textContent = Math.round(stats.thirst) + '%';
+            document.getElementById('happinessBar').style.width = stats.happiness + '%';
+            document.getElementById('happinessValue').textContent = Math.round(stats.happiness) + '%';
+            document.getElementById('fartBar').style.width = stats.fart + '%';
+            document.getElementById('fartValue').textContent = Math.round(stats.fart) + '%';
+            document.getElementById('peeBar').style.width = stats.pee + '%';
+            document.getElementById('peeValue').textContent = Math.round(stats.pee) + '%';
+
+            const person = document.getElementById('person');
+            const bubble = document.getElementById('thoughtBubble');
+            person.classList.remove('very-hungry', 'very-thirsty', 'very-sad', 'happy');
+            document.querySelectorAll('.badge').forEach(b => b.classList.remove('show'));
+            bubble.classList.remove('show');
+
+            let bubbleEmoji = '';
+            if (stats.hunger < 20) { person.classList.add('very-hungry'); document.getElementById('badgeHungry').classList.add('show'); bubbleEmoji = '😫🍖'; }
+            if (stats.thirst < 20) { person.classList.add('very-thirsty'); document.getElementById('badgeThirsty').classList.add('show'); bubbleEmoji = bubbleEmoji || '😵💧'; }
+            if (stats.happiness < 20) { person.classList.add('very-sad'); document.getElementById('badgeSad').classList.add('show'); bubbleEmoji = bubbleEmoji || '😢💔'; }
+            if (stats.fart > 80) { document.getElementById('badgeGassy').classList.add('show'); bubbleEmoji = bubbleEmoji || '💨😣'; }
+            if (stats.pee > 80) { document.getElementById('badgeUrgent').classList.add('show'); bubbleEmoji = bubbleEmoji || '🚽😰'; }
+            if (!bubbleEmoji && stats.happiness > 80 && stats.hunger > 70 && stats.thirst > 70) { person.classList.add('happy'); bubbleEmoji = '😊✨'; }
+
+            if (bubbleEmoji) { bubble.textContent = bubbleEmoji; bubble.classList.add('show'); }
+        }
+
+        function showMessage(text) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.classList.add('show');
+            setTimeout(() => msg.classList.remove('show'), 2000);
+        }
+
+        function createEmojiEffect(emoji) {
+            const person = document.getElementById('person');
+            const effect = document.createElement('div');
+            effect.className = 'emoji-effect';
+            effect.textContent = emoji;
+            effect.style.left = '50%';
+            effect.style.top = '30%';
+            effect.style.transform = 'translateX(-50%)';
+            person.appendChild(effect);
+            setTimeout(() => effect.remove(), 1000);
+        }
+
+        function spawnParticles(emoji, count) {
+            const person = document.getElementById('person');
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.textContent = emoji;
+                p.style.left = (40 + Math.random() * 40) + '%';
+                p.style.top = (30 + Math.random() * 30) + '%';
+                p.style.setProperty('--tx', (Math.random() * 60 - 30) + 'px');
+                p.style.setProperty('--ty', (Math.random() * -60 - 20) + 'px');
+                p.style.setProperty('--rot', (Math.random() * 360) + 'deg');
+                p.style.animationDelay = (i * 0.08) + 's';
+                person.appendChild(p);
+                setTimeout(() => p.remove(), 1100);
+            }
+        }
+
+        // ========== 喂食 ==========
+        function feed() {
+            if (isBusy || stats.hunger >= 100) {
+                if (!isBusy) showMessage(personName + '已经吃饱了！');
+                return;
+            }
+            ensureAudio();
+            stats.hunger = Math.min(100, stats.hunger + 20);
+            stats.happiness = Math.min(100, stats.happiness + 5);
+            stats.fart = Math.min(100, stats.fart + 8);
+
+            const person = document.getElementById('person');
+            const armLeft = document.getElementById('armLeft');
+            person.classList.add('eating');
+            armLeft.classList.add('show-prop');
+
+            playEatSound();
+            spawnParticles('🍖', 4);
+
+            setTimeout(() => {
+                person.classList.remove('eating');
+                armLeft.classList.remove('show-prop');
+            }, 1200);
+
+            createEmojiEffect('🍔');
+            showMessage(personName + '吃得很开心！');
+            updateDisplay();
+        }
+
+        // ========== 喂水 ==========
+        function giveWater() {
+            if (isBusy || stats.thirst >= 100) {
+                if (!isBusy) showMessage(personName + '已经不渴了！');
+                return;
+            }
+            ensureAudio();
+            stats.thirst = Math.min(100, stats.thirst + 20);
+            stats.happiness = Math.min(100, stats.happiness + 5);
+            stats.pee = Math.min(100, stats.pee + 10);
+
+            const person = document.getElementById('person');
+            const armRight = document.getElementById('armRight');
+            person.classList.add('drinking');
+            armRight.classList.add('show-prop');
+
+            playDrinkSound();
+            spawnParticles('💧', 4);
+
+            setTimeout(() => {
+                person.classList.remove('drinking');
+                armRight.classList.remove('show-prop');
+            }, 1200);
+
+            createEmojiEffect('💧');
+            showMessage(personName + '喝得很满足！');
+            updateDisplay();
+        }
+
+        // ========== 放屁 ==========
+        function fart() {
+            if (isBusy || stats.fart < 15) {
+                if (!isBusy) showMessage(personName + '没屁可放！');
+                return;
+            }
+            ensureAudio();
+            stats.fart = Math.max(0, stats.fart - 40);
+            stats.happiness = Math.min(100, stats.happiness + 8);
+
+            const person = document.getElementById('person');
+
+            // 先扭屁股
+            person.classList.add('farting');
+            playFartSound();
+
+            setTimeout(() => {
+                // 放屁烟雾
+                const cloud = document.createElement('div');
+                cloud.className = 'fart-cloud';
+                cloud.textContent = '💨';
+                cloud.style.left = '25%';
+                cloud.style.bottom = '55px';
+                person.appendChild(cloud);
+                setTimeout(() => cloud.remove(), 1500);
+
+                setTimeout(() => {
+                    const cloud2 = document.createElement('div');
+                    cloud2.className = 'fart-cloud';
+                    cloud2.textContent = '☁️';
+                    cloud2.style.left = '20%';
+                    cloud2.style.bottom = '65px';
+                    person.appendChild(cloud2);
+                    setTimeout(() => cloud2.remove(), 1500);
+                }, 200);
+            }, 350); // 在扭动中间放屁
+
+            setTimeout(() => person.classList.remove('farting'), 800);
+
+            createEmojiEffect('😌');
+            showMessage('噗~ ' + personName + '舒服多了！');
+            updateDisplay();
+        }
+
+        // ========== 上厕所 ==========
+        async function goToilet() {
+            if (isBusy || stats.pee < 20) {
+                if (!isBusy) showMessage(personName + '现在还不急！');
+                return;
+            }
+            isBusy = true;
+            setButtonsDisabled(true);
+
+            const person = document.getElementById('person');
+            const startX = dragOffset.x;
+            const startY = dragOffset.y;
+            const containerRect = document.querySelector('.container').getBoundingClientRect();
+            const doorRect = document.getElementById('toiletDoor').getBoundingClientRect();
+            const targetX = doorRect.left - containerRect.left - 50;
+            const targetY = doorRect.top - containerRect.top - 35;
+
+            wrapper.style.transition = 'transform 0.9s ease';
+            dragOffset.x = targetX; dragOffset.y = targetY;
+            wrapper.style.transform = `translate(${targetX}px, ${targetY}px)`;
+            await wait(1000);
+
+            person.classList.add('in-toilet');
+            await wait(600);
+            await wait(2000);
+
+            person.classList.remove('in-toilet');
+            stats.pee = 0;
+            stats.happiness = Math.min(100, stats.happiness + 10);
+            await wait(500);
+
+            wrapper.style.transition = 'transform 0.9s ease';
+            dragOffset.x = startX; dragOffset.y = startY;
+            wrapper.style.transform = `translate(${startX}px, ${startY}px)`;
+            await wait(900);
+
+            wrapper.style.transition = '';
+            isBusy = false;
+            setButtonsDisabled(false);
+
+            createEmojiEffect('🧻');
+            showMessage(personName + '上完厕所，一身轻松！');
+            updateDisplay();
+        }
+
+        function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+        function setButtonsDisabled(d) { document.querySelectorAll('.btn').forEach(b => b.disabled = d); }
+
+        // ========== 姓名 ==========
+        function updateName() {
+            personName = document.getElementById('nameInput').value || '小人';
+            document.getElementById('nameDisplay').textContent = personName + '的快乐生活';
+            showMessage('名字已更新为：' + personName);
+        }
+
+        // ========== 照片处理 ==========
+        function processPhotoWithCanvas(img, cb) {
+            const size = 400;
+            const c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2, 0, Math.PI*2);
+            ctx.closePath(); ctx.clip();
+            const min = Math.min(img.width, img.height);
+            ctx.drawImage(img, (img.width-min)/2, (img.height-min)/2, min, min, 0, 0, size, size);
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2 - 5, 0, Math.PI*2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 10; ctx.stroke();
+            const g = ctx.createRadialGradient(size/2, size/2, size/2-15, size/2, size/2, size/2);
+            g.addColorStop(0, 'rgba(255,255,255,0)');
+            g.addColorStop(1, 'rgba(255,255,255,0.3)');
+            ctx.fillStyle = g; ctx.fill();
+            cb(c.toDataURL('image/png'));
+        }
+
+        function updatePhoto(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const r = new FileReader();
+            r.onload = function(ev) {
+                const img = new Image();
+                img.onload = function() {
+                    processPhotoWithCanvas(img, function(url) {
+                        document.getElementById('facePhoto').src = url;
+                        document.getElementById('facePhoto').style.display = 'block';
+                        document.getElementById('defaultFace').style.display = 'none';
+                        document.getElementById('cheeks').style.display = 'none';
+                        document.getElementById('photoPreview').src = url;
+                        document.getElementById('photoPreview').style.display = 'block';
+                        showMessage('照片已更新！');
+                    });
+                };
+                img.src = ev.target.result;
+            };
+            r.readAsDataURL(file);
+        }
+
+        // ========== 主循环 ==========
+        function startGame() {
+            gameLoop = setInterval(() => {
+                if (isBusy) return;
+                stats.hunger = Math.max(0, stats.hunger - 1.5);
+                stats.thirst = Math.max(0, stats.thirst - 2.0);
+                stats.fart = Math.min(100, stats.fart + 1.2);
+                stats.pee = Math.min(100, stats.pee + 1.5);
+                if (stats.hunger < 20 || stats.thirst < 20) stats.happiness = Math.max(0, stats.happiness - 2);
+                else if (stats.hunger > 70 && stats.thirst > 70) stats.happiness = Math.min(100, stats.happiness + 1);
+                if (stats.fart > 80 || stats.pee > 80) stats.happiness = Math.max(0, stats.happiness - 1);
+                updateDisplay();
+            }, 1000);
+        }
+
+        startGame();
+        updateDisplay();
+    </script>
+</body>
+</html>
